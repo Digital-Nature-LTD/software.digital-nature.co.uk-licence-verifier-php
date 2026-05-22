@@ -1,0 +1,26 @@
+{
+  "name": "digital-nature/licence-verifier",
+  "description": "PHP client for the Digital Nature licence verification API",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": ">=7.4",
+    "psr/http-client": "^1.0",
+    "psr/http-message": "^1.0",
+    "psr/http-factory": "^1.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.6",
+    "nyholm/psr7": "^1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "DigitalNature\\LicenceVerifier\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "DigitalNature\\LicenceVerifier\\Tests\\": "tests/"
+    }
+  }
+}
