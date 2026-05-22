@@ -14,15 +14,27 @@ class MockHttpClient implements ClientInterface
     /** @var array<array{method: string, url: string}> */
     public array $requests = [];
 
-    private ResponseInterface $response;
+    /** @var ResponseInterface[] */
+    private array $responses;
 
-    public function __construct(int $status, mixed $body)
+    private int $index = 0;
+
+    public function __construct(ResponseInterface ...$responses)
     {
-        $this->response = new Response(
+        $this->responses = $responses;
+    }
+
+    /**
+     * @param int   $status
+     * @param mixed $body
+     */
+    public static function responding(int $status, $body): self
+    {
+        return new self(new Response(
             $status,
             ['Content-Type' => 'application/json'],
             (string) json_encode($body)
-        );
+        ));
     }
 
     public function sendRequest(RequestInterface $request): ResponseInterface
@@ -31,6 +43,10 @@ class MockHttpClient implements ClientInterface
             'method' => $request->getMethod(),
             'url'    => (string) $request->getUri(),
         ];
-        return $this->response;
+
+        $response = $this->responses[$this->index] ?? end($this->responses);
+        $this->index++;
+
+        return $response;
     }
 }

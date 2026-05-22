@@ -22,11 +22,14 @@ class LicenceVerifierTest extends TestCase
         $this->factory = new Psr17Factory();
     }
 
-    private function makeClient(int $status, mixed $body, int $cacheTtl = 0): LicenceVerifier
+    /**
+     * @param mixed $body
+     */
+    private function makeClient(int $status, $body, int $cacheTtl = 0): LicenceVerifier
     {
         return new LicenceVerifier(
             'https://verify.example.com',
-            new MockHttpClient($status, $body),
+            MockHttpClient::responding($status, $body),
             $this->factory,
             $this->factory,
             $cacheTtl
@@ -153,7 +156,7 @@ class LicenceVerifierTest extends TestCase
 
     public function testVerifyServesCachedResultOnSecondCall(): void
     {
-        $httpClient = new MockHttpClient(200, [
+        $httpClient = MockHttpClient::responding(200, [
             'valid' => true, 'licence_key' => 'KEY', 'product_slug' => 'plugin',
             'status' => 'active', 'expires_at' => null,
         ]);
@@ -169,37 +172,38 @@ class LicenceVerifierTest extends TestCase
 
     public function testActivateInvalidatesVerifyCache(): void
     {
-        // We can't vary responses per-call with MockHttpClient, so we verify
-        // that two verify calls after an activate result in two HTTP requests.
-        $httpClient = new MockHttpClient(200, [
-            'valid' => true, 'licence_key' => 'KEY', 'product_slug' => 'plugin',
-            'status' => 'active', 'expires_at' => null,
-        ]);
+        $verifyBody   = ['valid' => true, 'licence_key' => 'KEY', 'product_slug' => 'plugin', 'status' => 'active', 'expires_at' => null];
+        $activateBody = ['activated' => true, 'domain' => 'example.com', 'domain_type' => 'production', 'activations_used' => 1, 'activation_limit' => 2];
+
+        $factory  = new \Nyholm\Psr7\Factory\Psr17Factory();
+        $makeRes  = static function (int $status, $body) use ($factory): \Psr\Http\Message\ResponseInterface {
+            return new \Nyholm\Psr7\Response($status, ['Content-Type' => 'application/json'], (string) json_encode($body));
+        };
+
+        $httpClient = new MockHttpClient(
+            $makeRes(200, $verifyBody),   // call 1: verify (will be cached)
+            $makeRes(200, $activateBody), // call 2: activate (invalidates cache)
+            $makeRes(200, $verifyBody)    // call 3: verify (cache miss — must re-fetch)
+        );
+
         $verifier = new LicenceVerifier(
             'https://verify.example.com', $httpClient, $this->factory, $this->factory, 60000
         );
 
-        $verifier->verify('KEY'); // call 1, cached
+        $verifier->verify('KEY');
+        $verifier->activate('KEY', 'example.com');
+        $verifier->verify('KEY');
 
-        // Swap out the client for the activate call, then back for the second verify
-        $activateClient = new MockHttpClient(200, [
-            'activated' => true, 'domain' => 'example.com',
-            'domain_type' => 'production', 'activations_used' => 1, 'activation_limit' => 2,
-        ]);
-        $verifierWithActivate = new LicenceVerifier(
-            'https://verify.example.com', $activateClient, $this->factory, $this->factory, 60000
-        );
-        $verifierWithActivate->activate('KEY', 'example.com'); // invalidates cache
+        $verifyCalls = array_filter($httpClient->requests, static function (array $r): bool {
+            return parse_url($r['url'], PHP_URL_PATH) === '/verify';
+        });
 
-        // Re-verify on original verifier (cache was cleared, must re-fetch)
-        $verifier->verify('KEY'); // call 2
-
-        $this->assertCount(2, $httpClient->requests);
+        $this->assertCount(2, $verifyCalls);
     }
 
     public function testCachingDisabledWhenTtlIsZero(): void
     {
-        $httpClient = new MockHttpClient(200, [
+        $httpClient = MockHttpClient::responding(200, [
             'valid' => true, 'licence_key' => 'KEY', 'product_slug' => 'plugin',
             'status' => 'active', 'expires_at' => null,
         ]);
