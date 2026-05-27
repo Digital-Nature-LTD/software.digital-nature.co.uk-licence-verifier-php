@@ -14,6 +14,7 @@ use DigitalNature\LicenceVerifier\Response\ActivateResult;
 use DigitalNature\LicenceVerifier\Response\DeactivateResult;
 use DigitalNature\LicenceVerifier\Response\InfoResult;
 use DigitalNature\LicenceVerifier\Response\LicenceDomain;
+use DigitalNature\LicenceVerifier\Response\UpdateResult;
 use DigitalNature\LicenceVerifier\Response\VerifyResult;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
@@ -98,6 +99,28 @@ class LicenceVerifier
         $this->invalidate('verify:' . $licenceKey, 'info:' . $licenceKey);
 
         return new DeactivateResult((bool) $data['deactivated'], (string) $data['domain']);
+    }
+
+    public function checkForUpdate(string $licenceKey, ?string $currentVersion = null): UpdateResult
+    {
+        $qs = 'licence_key=' . urlencode($licenceKey);
+        if ($currentVersion !== null) {
+            $qs .= '&current_version=' . urlencode($currentVersion);
+        }
+
+        $data = $this->get('/update?' . $qs);
+
+        $downloadToken = isset($data['download_token']) ? (string) $data['download_token'] : null;
+        $downloadUrl   = $downloadToken !== null
+            ? $this->baseUrl . '/download?token=' . urlencode($downloadToken)
+            : null;
+
+        return new UpdateResult(
+            (bool) $data['update_available'],
+            isset($data['latest_version']) ? (string) $data['latest_version'] : null,
+            $downloadToken,
+            $downloadUrl,
+        );
     }
 
     public function info(string $licenceKey): InfoResult
