@@ -152,6 +152,69 @@ class LicenceVerifierTest extends TestCase
         $this->makeClient(404, ['error' => 'Licence not found'])->info('BAD');
     }
 
+    // ── checkForUpdate ────────────────────────────────────────────────────────
+
+    public function testCheckForUpdateReturnsMappedResult(): void
+    {
+        $client = $this->makeClient(200, [
+            'update_available' => true,
+            'latest_version'   => '2.0.0',
+            'download_token'   => 'tok_abc123',
+        ]);
+
+        $result = $client->checkForUpdate('KEY');
+
+        $this->assertTrue($result->updateAvailable);
+        $this->assertSame('2.0.0', $result->latestVersion);
+        $this->assertSame('tok_abc123', $result->downloadToken);
+        $this->assertSame('https://verify.example.com/download?token=tok_abc123', $result->downloadUrl);
+    }
+
+    public function testCheckForUpdateReturnsNullDownloadWhenNoToken(): void
+    {
+        $client = $this->makeClient(200, [
+            'update_available' => false,
+            'latest_version'   => null,
+            'download_token'   => null,
+        ]);
+
+        $result = $client->checkForUpdate('KEY');
+
+        $this->assertFalse($result->updateAvailable);
+        $this->assertNull($result->latestVersion);
+        $this->assertNull($result->downloadToken);
+        $this->assertNull($result->downloadUrl);
+    }
+
+    public function testCheckForUpdatePassesCurrentVersionInQueryString(): void
+    {
+        $httpClient = MockHttpClient::responding(200, [
+            'update_available' => false, 'latest_version' => '1.0.0', 'download_token' => null,
+        ]);
+        $verifier = new LicenceVerifier(
+            'https://verify.example.com', $httpClient, $this->factory, $this->factory
+        );
+
+        $verifier->checkForUpdate('MY-KEY', '1.0.0');
+
+        $this->assertCount(1, $httpClient->requests);
+        $this->assertSame('GET', $httpClient->requests[0]['method']);
+        $this->assertStringContainsString('licence_key=MY-KEY', $httpClient->requests[0]['url']);
+        $this->assertStringContainsString('current_version=1.0.0', $httpClient->requests[0]['url']);
+    }
+
+    public function testCheckForUpdateThrowsLicenceNotFoundOn404(): void
+    {
+        $this->expectException(LicenceNotFoundException::class);
+        $this->makeClient(404, ['error' => 'Licence not found'])->checkForUpdate('BAD');
+    }
+
+    public function testCheckForUpdateThrowsLicenceInactiveOn422(): void
+    {
+        $this->expectException(LicenceInactiveException::class);
+        $this->makeClient(422, ['error' => 'Licence is suspended'])->checkForUpdate('KEY');
+    }
+
     // ── caching ───────────────────────────────────────────────────────────────
 
     public function testVerifyServesCachedResultOnSecondCall(): void
