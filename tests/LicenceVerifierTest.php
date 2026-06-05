@@ -160,6 +160,8 @@ class LicenceVerifierTest extends TestCase
             'update_available' => true,
             'latest_version'   => '2.0.0',
             'download_token'   => 'tok_abc123',
+            'product_name'     => 'My Plugin',
+            'release_notes'    => 'Bug fixes and improvements',
         ]);
 
         $result = $client->checkForUpdate('KEY');
@@ -168,6 +170,9 @@ class LicenceVerifierTest extends TestCase
         $this->assertSame('2.0.0', $result->latestVersion);
         $this->assertSame('tok_abc123', $result->downloadToken);
         $this->assertSame('https://verify.example.com/download?token=tok_abc123', $result->downloadUrl);
+        $this->assertSame('https://verify.example.com/download?licence_key=KEY', $result->stableDownloadUrl);
+        $this->assertSame('My Plugin', $result->productName);
+        $this->assertSame('Bug fixes and improvements', $result->releaseNotes);
     }
 
     public function testCheckForUpdateReturnsNullDownloadWhenNoToken(): void
@@ -184,6 +189,9 @@ class LicenceVerifierTest extends TestCase
         $this->assertNull($result->latestVersion);
         $this->assertNull($result->downloadToken);
         $this->assertNull($result->downloadUrl);
+        $this->assertSame('https://verify.example.com/download?licence_key=KEY', $result->stableDownloadUrl);
+        $this->assertNull($result->productName);
+        $this->assertNull($result->releaseNotes);
     }
 
     public function testCheckForUpdatePassesCurrentVersionInQueryString(): void
