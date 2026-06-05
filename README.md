@@ -74,6 +74,70 @@ try {
 }
 ```
 
+## WordPress plugin auto-updates
+
+`WordPress\Updater` hooks a plugin into the WordPress update system so that new versions published to the Digital Nature store appear in **Dashboard → Updates** and can be installed with one click.
+
+### Installation
+
+Include the library in your plugin's `composer.json` alongside a PSR-18 client:
+
+```bash
+composer require digital-nature/licence-verifier guzzlehttp/guzzle nyholm/psr7
+```
+
+Load Composer's autoloader from your plugin's main file (if not already done by the plugin framework):
+
+```php
+require_once __DIR__ . '/vendor/autoload.php';
+```
+
+### Setup
+
+Instantiate `Updater` once, early in your plugin's boot sequence (e.g. directly in the main plugin file or on the `init` hook):
+
+```php
+use DigitalNature\LicenceVerifier\LicenceVerifier;
+use DigitalNature\LicenceVerifier\WordPress\Updater;
+use GuzzleHttp\Client;
+use Nyholm\Psr7\Factory\Psr17Factory;
+
+$factory  = new Psr17Factory();
+$verifier = new LicenceVerifier(
+    'https://verify.software.digital-nature.co.uk',
+    new Client(),
+    $factory,
+    $factory,
+);
+
+new Updater(
+    __FILE__,                                 // absolute path to the plugin's main file
+    'my-plugin/my-plugin.php',                // plugin slug (directory/filename.php)
+    get_option('my_plugin_licence_key', ''),  // stored licence key
+    $verifier,
+    [
+        'requires_php' => '7.4',  // minimum PHP version shown in the update UI
+        'requires_wp'  => '6.0',  // minimum WordPress version
+        'tested'       => '6.8',  // tested up to (shown in the update UI)
+        'cache_hours'  => 12,     // how long to cache the update check (default: 12)
+    ]
+);
+```
+
+The constructor registers all required WordPress hooks automatically — no further wiring is needed.
+
+### How it works
+
+| WordPress hook | What it does |
+|---|---|
+| `pre_set_site_transient_update_plugins` | Checks for a newer version and injects it into the WP update transient |
+| `plugins_api` | Supplies plugin name, version, and changelog for the "View version details" modal |
+| `upgrader_process_complete` | Clears the cached update info after the plugin is updated |
+
+Update checks are cached in WordPress transients for `cache_hours` to avoid hitting the API on every page load. The download URL passed to WordPress never expires — the verify service validates the licence key on each download request.
+
+Errors (invalid licence, expired licence, network failure) are silently swallowed so they never break the WordPress admin.
+
 ## Requirements
 
 - PHP 7.4 or later

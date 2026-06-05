@@ -110,16 +110,20 @@ class LicenceVerifier
 
         $data = $this->get('/update?' . $qs);
 
-        $downloadToken = isset($data['download_token']) ? (string) $data['download_token'] : null;
-        $downloadUrl   = $downloadToken !== null
+        $downloadToken     = isset($data['download_token']) ? (string) $data['download_token'] : null;
+        $downloadUrl       = $downloadToken !== null
             ? $this->baseUrl . '/download?token=' . urlencode($downloadToken)
             : null;
+        $stableDownloadUrl = $this->baseUrl . '/download?licence_key=' . urlencode($licenceKey);
 
         return new UpdateResult(
             (bool) $data['update_available'],
             isset($data['latest_version']) ? (string) $data['latest_version'] : null,
             $downloadToken,
             $downloadUrl,
+            $stableDownloadUrl,
+            isset($data['product_name']) ? (string) $data['product_name'] : null,
+            isset($data['release_notes']) ? (string) $data['release_notes'] : null,
         );
     }
 
