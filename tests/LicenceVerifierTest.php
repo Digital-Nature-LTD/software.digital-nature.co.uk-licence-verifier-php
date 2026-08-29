@@ -54,6 +54,50 @@ class LicenceVerifierTest extends TestCase
         $this->assertNull($result->expiresAt);
     }
 
+    public function testVerifyCarriesPackageAndAddons(): void
+    {
+        $client = $this->makeClient(200, [
+            'valid' => true, 'licence_key' => 'ABC-123', 'product_slug' => 'fa-pro',
+            'status' => 'active', 'expires_at' => null,
+            'package' => 'fa-pro', 'addons' => ['bookings', 'embed'],
+        ]);
+
+        $result = $client->verify('ABC-123');
+
+        $this->assertSame('fa-pro', $result->package);
+        $this->assertSame(['bookings', 'embed'], $result->addons);
+    }
+
+    public function testVerifyDefaultsPackageAndAddonsOnAnOlderServer(): void
+    {
+        // The fields are additive. A plugin talking to a verify service that
+        // predates packages must get null and [] rather than an undefined
+        // property — otherwise every plugin repeats the same isset() check.
+        $client = $this->makeClient(200, [
+            'valid' => true, 'licence_key' => 'ABC-123', 'product_slug' => 'my-plugin',
+            'status' => 'active', 'expires_at' => null,
+        ]);
+
+        $result = $client->verify('ABC-123');
+
+        $this->assertNull($result->package);
+        $this->assertSame([], $result->addons);
+    }
+
+    public function testInfoCarriesPackageAndAddons(): void
+    {
+        $client = $this->makeClient(200, [
+            'licence_key' => 'ABC-123', 'product_slug' => 'fa-pro', 'status' => 'active',
+            'expires_at' => null, 'activation_limit' => 5, 'activations_used' => 1,
+            'domains' => [], 'package' => 'fa-pro', 'addons' => ['bookings'],
+        ]);
+
+        $result = $client->info('ABC-123');
+
+        $this->assertSame('fa-pro', $result->package);
+        $this->assertSame(['bookings'], $result->addons);
+    }
+
     public function testVerifyThrowsLicenceNotFoundOn404(): void
     {
         $this->expectException(LicenceNotFoundException::class);
