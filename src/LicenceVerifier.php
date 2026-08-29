@@ -63,7 +63,9 @@ class LicenceVerifier
                 (string) $cached['licence_key'],
                 (string) $cached['product_slug'],
                 (string) $cached['status'],
-                isset($cached['expires_at']) ? (string) $cached['expires_at'] : null
+                isset($cached['expires_at']) ? (string) $cached['expires_at'] : null,
+                isset($cached['package']) ? (string) $cached['package'] : null,
+                isset($cached['addons']) ? (array) $cached['addons'] : []
             );
         }
 
@@ -75,7 +77,12 @@ class LicenceVerifier
             (string) $data['licence_key'],
             (string) $data['product_slug'],
             (string) $data['status'],
-            isset($data['expires_at']) ? (string) $data['expires_at'] : null
+            isset($data['expires_at']) ? (string) $data['expires_at'] : null,
+            // Defaulted, not passed through: a verify service older than
+            // packages omits these, and every plugin would otherwise repeat
+            // the same existence check before it could read them.
+            isset($data['package']) ? (string) $data['package'] : null,
+            isset($data['addons']) ? (array) $data['addons'] : []
         );
     }
 
@@ -162,7 +169,9 @@ class LicenceVerifier
             isset($data['expires_at']) ? (string) $data['expires_at'] : null,
             isset($data['activation_limit']) ? (int) $data['activation_limit'] : null,
             (int) $data['activations_used'],
-            $domains
+            $domains,
+            isset($data['package']) ? (string) $data['package'] : null,
+            isset($data['addons']) ? (array) $data['addons'] : []
         );
     }
 
