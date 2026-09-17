@@ -14,6 +14,7 @@ use DigitalNature\LicenceVerifier\Response\ActivateResult;
 use DigitalNature\LicenceVerifier\Response\DeactivateResult;
 use DigitalNature\LicenceVerifier\Response\InfoResult;
 use DigitalNature\LicenceVerifier\Response\LicenceDomain;
+use DigitalNature\LicenceVerifier\Response\TrialGrant;
 use DigitalNature\LicenceVerifier\Response\UpdateResult;
 use DigitalNature\LicenceVerifier\Response\VerifyResult;
 use Psr\Http\Client\ClientInterface;
@@ -65,12 +66,13 @@ class LicenceVerifier
                 (string) $cached['status'],
                 isset($cached['expires_at']) ? (string) $cached['expires_at'] : null,
                 isset($cached['package']) ? (string) $cached['package'] : null,
-                isset($cached['addons']) ? (array) $cached['addons'] : []
+                isset($cached['addons']) ? (array) $cached['addons'] : [],
+                $this->mapTrials($cached)
             );
         }
 
         $data = $this->post('/verify', ['licence_key' => $licenceKey]);
-        $this->setCache($cacheKey, $data);
+        $this->setCache($cacheKey, $data, $this->soonestTrialEndMs($data));
 
         return new VerifyResult(
             (bool) $data['valid'],
@@ -82,7 +84,8 @@ class LicenceVerifier
             // packages omits these, and every plugin would otherwise repeat
             // the same existence check before it could read them.
             isset($data['package']) ? (string) $data['package'] : null,
-            isset($data['addons']) ? (array) $data['addons'] : []
+            isset($data['addons']) ? (array) $data['addons'] : [],
+            $this->mapTrials($data)
         );
     }
 
@@ -144,7 +147,7 @@ class LicenceVerifier
         }
 
         $data = $this->get('/info?licence_key=' . urlencode($licenceKey));
-        $this->setCache($cacheKey, $data);
+        $this->setCache($cacheKey, $data, $this->soonestTrialEndMs($data));
 
         return $this->buildInfoResult($data);
     }
@@ -171,8 +174,48 @@ class LicenceVerifier
             (int) $data['activations_used'],
             $domains,
             isset($data['package']) ? (string) $data['package'] : null,
-            isset($data['addons']) ? (array) $data['addons'] : []
+            isset($data['addons']) ? (array) $data['addons'] : [],
+            $this->mapTrials($data)
         );
+    }
+
+    /**
+     * Free trials, defaulted to [] for a verify service older than them.
+     *
+     * @param array<mixed> $data
+     * @return TrialGrant[]
+     */
+    private function mapTrials(array $data): array
+    {
+        $trials = [];
+        foreach ((array) ($data['trials'] ?? []) as $t) {
+            $t = (array) $t;
+            if (isset($t['addon'], $t['ends_at'])) {
+                $trials[] = new TrialGrant((string) $t['addon'], (string) $t['ends_at']);
+            }
+        }
+        return $trials;
+    }
+
+    /**
+     * The soonest trial end in epoch milliseconds, or null. A cached answer is
+     * never kept past it, or the cache would grant the add-on after the trial.
+     *
+     * @param array<mixed> $data
+     */
+    private function soonestTrialEndMs(array $data): ?float
+    {
+        $soonest = null;
+        foreach ($this->mapTrials($data) as $trial) {
+            $at = strtotime($trial->endsAt);
+            if ($at === false) {
+                continue;
+            }
+            // strtotime drops milliseconds; round DOWN so the cache never outlives the end.
+            $ms = (float) $at * 1000;
+            $soonest = $soonest === null ? $ms : min($soonest, $ms);
+        }
+        return $soonest;
     }
 
     /**
@@ -248,13 +291,17 @@ class LicenceVerifier
     }
 
     /** @param array<mixed> $value */
-    private function setCache(string $key, array $value): void
+    private function setCache(string $key, array $value, ?float $notAfterMs = null): void
     {
         if ($this->cacheTtl > 0) {
-            $this->cache[$key] = [
-                'value'   => $value,
-                'expires' => microtime(true) * 1000 + $this->cacheTtl,
-            ];
+            $now = microtime(true) * 1000;
+            $expires = $now + $this->cacheTtl;
+            if ($notAfterMs !== null) {
+                $expires = min($expires, $notAfterMs);
+            }
+            if ($expires > $now) {
+                $this->cache[$key] = ['value' => $value, 'expires' => $expires];
+            }
         }
     }
 

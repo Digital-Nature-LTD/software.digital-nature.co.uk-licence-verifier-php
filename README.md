@@ -45,6 +45,22 @@ $info = $verifier->info('XXXX-XXXX-XXXX-XXXX');
 // $info->licenceKey, ->productSlug, ->status, ->activationsUsed, ->activationLimit, ->domains[]
 ```
 
+## Packages, add-ons and free trials
+
+`verify()` and `info()` also say what the licence grants:
+
+```php
+$result->package; // 'club-platform', or null for an ordinary product
+$result->addons;  // ['club-platform-pitch-x-3'] — everything granted RIGHT NOW
+$result->trials;  // [TrialGrant { addon: 'club-platform-pitch-x-3', endsAt: '2026-10-17T09:00:00.000Z' }]
+```
+
+- `addons` never includes a free trial that has ended, so gating on `addons`
+  alone already enforces a trial's end.
+- `trials` says which of `addons` are on a trial and when each stops — for
+  "N days left". Empty when none, and from a verify service older than trials.
+- A cached result is never kept past the soonest trial end.
+
 ## Options
 
 The fifth constructor argument is `$cacheTtl` in milliseconds (default `30000`). Responses from `verify()` and `info()` are cached in-process for the duration of the request. Set to `0` to disable.
