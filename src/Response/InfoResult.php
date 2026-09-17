@@ -29,10 +29,18 @@ final class InfoResult
      * @var string[]
      */
     public array $addons;
+    /**
+     * Which of `addons` are held on a free trial, and when each stops. Empty
+     * when none, and from a verify service older than free trials.
+     *
+     * @var TrialGrant[]
+     */
+    public array $trials;
 
     /**
      * @param LicenceDomain[] $domains
      * @param string[] $addons
+     * @param TrialGrant[] $trials
      */
     public function __construct(
         string $licenceKey,
@@ -43,7 +51,8 @@ final class InfoResult
         int $activationsUsed,
         array $domains,
         ?string $package = null,
-        array $addons = []
+        array $addons = [],
+        array $trials = []
     ) {
         $this->licenceKey = $licenceKey;
         $this->productSlug = $productSlug;
@@ -54,5 +63,6 @@ final class InfoResult
         $this->domains = $domains;
         $this->package = $package;
         $this->addons = $addons;
+        $this->trials = $trials;
     }
 }

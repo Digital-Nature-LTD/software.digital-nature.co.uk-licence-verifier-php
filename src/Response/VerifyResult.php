@@ -26,9 +26,17 @@ final class VerifyResult
      * @var string[]
      */
     public array $addons;
+    /**
+     * Which of `addons` are held on a free trial, and when each stops. Empty
+     * when none, and from a verify service older than free trials.
+     *
+     * @var TrialGrant[]
+     */
+    public array $trials;
 
     /**
      * @param string[] $addons
+     * @param TrialGrant[] $trials
      */
     public function __construct(
         bool $valid,
@@ -37,7 +45,8 @@ final class VerifyResult
         string $status,
         ?string $expiresAt,
         ?string $package = null,
-        array $addons = []
+        array $addons = [],
+        array $trials = []
     ) {
         $this->valid = $valid;
         $this->licenceKey = $licenceKey;
@@ -46,5 +55,6 @@ final class VerifyResult
         $this->expiresAt = $expiresAt;
         $this->package = $package;
         $this->addons = $addons;
+        $this->trials = $trials;
     }
 }

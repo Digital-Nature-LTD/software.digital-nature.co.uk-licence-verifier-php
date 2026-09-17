@@ -84,6 +84,53 @@ class LicenceVerifierTest extends TestCase
         $this->assertSame([], $result->addons);
     }
 
+    public function testVerifyCarriesFreeTrials(): void
+    {
+        $client = $this->makeClient(200, [
+            'valid' => true, 'licence_key' => 'ABC-123', 'product_slug' => 'club-platform',
+            'status' => 'active', 'expires_at' => null,
+            'package' => 'club-platform', 'addons' => ['pitch-x-3'],
+            'trials' => [['addon' => 'pitch-x-3', 'ends_at' => '2026-10-17T09:00:00.000Z']],
+        ]);
+
+        $result = $client->verify('ABC-123');
+
+        $this->assertCount(1, $result->trials);
+        $this->assertSame('pitch-x-3', $result->trials[0]->addon);
+        $this->assertSame('2026-10-17T09:00:00.000Z', $result->trials[0]->endsAt);
+    }
+
+    public function testVerifyDefaultsTrialsOnAnOlderServer(): void
+    {
+        $client = $this->makeClient(200, [
+            'valid' => true, 'licence_key' => 'ABC-123', 'product_slug' => 'club-platform',
+            'status' => 'active', 'expires_at' => null, 'package' => 'club-platform', 'addons' => [],
+        ]);
+
+        $this->assertSame([], $client->verify('ABC-123')->trials);
+    }
+
+    public function testVerifyIsNotCachedPastATrialsEnd(): void
+    {
+        // A trial that has already ended by the time the answer arrives: caching
+        // it for the TTL would keep granting the add-on after the trial stopped.
+        $body = [
+            'valid' => true, 'licence_key' => 'KEY', 'product_slug' => 'p', 'status' => 'active',
+            'expires_at' => null, 'package' => 'p', 'addons' => ['a'],
+            'trials' => [['addon' => 'a', 'ends_at' => gmdate('Y-m-d\\TH:i:s\\Z', time() - 1)]],
+        ];
+        $http = new MockHttpClient(
+            new \Nyholm\Psr7\Response(200, ['Content-Type' => 'application/json'], (string) json_encode($body)),
+            new \Nyholm\Psr7\Response(200, ['Content-Type' => 'application/json'], (string) json_encode($body))
+        );
+        $client = new LicenceVerifier('https://verify.example.com', $http, $this->factory, $this->factory, 60000);
+
+        $client->verify('KEY');
+        $client->verify('KEY');
+
+        $this->assertCount(2, $http->requests);
+    }
+
     public function testInfoCarriesPackageAndAddons(): void
     {
         $client = $this->makeClient(200, [
@@ -96,6 +143,7 @@ class LicenceVerifierTest extends TestCase
 
         $this->assertSame('fa-pro', $result->package);
         $this->assertSame(['bookings'], $result->addons);
+        $this->assertSame([], $result->trials);
     }
 
     public function testVerifyThrowsLicenceNotFoundOn404(): void
